@@ -5,13 +5,12 @@ setup(
     name='sotawhat',
     version=str(sotawhat.__VERSION__),
     packages=find_packages(),
-    description='arxiv-sanity query script',
-    long_description=str('SOTAwhat is a script to query Arxiv for the latest '
+    description='arxiv scanner based on sotawhat',
+    long_description=str('arxiv scanner is a script to query Arxiv for the latest '
                          'abstracts and extract summaries from them. '),
-    url='https://huyenchip.com/2018/10/04/sotawhat.html',
     license="",
     install_requires=['six', 'nltk', 'pyspellchecker'],
     entry_points={
-        'console_scripts': ['sotawhat=sotawhat.sotawhat:main'],
+        'console_scripts': ['scan=sotawhat.scan:main'],
     }
 )
