@@ -12,3 +12,30 @@ Up to now I only slightly modify the code for a few functions:
 
 
 **Thanks again for the origin code from sotawhat!**
+
+# Usage
+
+Step 1: clone this repo, and go inside that repo:
+```bash
+$ git clone [HTTPS or SSH linnk to this repo]
+$ cd sotawhat
+```
+Step 2: install using pip
+
+```bash
+$ pip3 install .
+```
+
+On Windows, due to encoding errors, the script may cause issues when run on the command line. It is
+recommended to use `pip install win-unicode-console --upgrade` prior to launching the script. If you get
+UnicodeEncodingError, you *must* install the above.
+
+On Mac, it works fine.
+
+Step 3: one-line command
+
+```bash
+$ scan KEY_WORD TIMES
+```
+
+for example: `scan reasoning model 20`
