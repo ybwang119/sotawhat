@@ -1,0 +1,11 @@
+Metadata-Version: 2.2
+Name: sotawhat
+Version: 0.0.1
+Summary: arxiv scanner based on sotawhat
+Requires-Dist: six
+Requires-Dist: pyspellchecker
+Dynamic: description
+Dynamic: requires-dist
+Dynamic: summary
+
+arxiv scanner is a script to query Arxiv for the latest abstracts and extract summaries from them. 

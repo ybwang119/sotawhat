@@ -9,7 +9,7 @@ setup(
     long_description=str('arxiv scanner is a script to query Arxiv for the latest '
                          'abstracts and extract summaries from them. '),
     license="",
-    install_requires=['six', 'nltk', 'pyspellchecker'],
+    install_requires=['six', 'pyspellchecker'],
     entry_points={
         'console_scripts': ['scan=sotawhat.scan:main'],
     }

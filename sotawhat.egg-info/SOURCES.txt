@@ -1,0 +1,10 @@
+README.md
+setup.py
+sotawhat/__init__.py
+sotawhat/scan.py
+sotawhat.egg-info/PKG-INFO
+sotawhat.egg-info/SOURCES.txt
+sotawhat.egg-info/dependency_links.txt
+sotawhat.egg-info/entry_points.txt
+sotawhat.egg-info/requires.txt
+sotawhat.egg-info/top_level.txt
