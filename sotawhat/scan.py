@@ -10,7 +10,9 @@ import html
 # from six.moves.html_parser import HTMLParser
 from spellchecker import SpellChecker
 import time
-
+import pandas as pd
+from add_gpt import gpt_marker
+from tqdm import tqdm
 # try:
 #     nltk.data.find('tokenizers/punkt')
 # except LookupError:
@@ -184,11 +186,10 @@ def is_list_numer(tokens, i, value):
 def get_report(paper, keywords):
     # print(keyword in paper['abstract'].lower())
     # print(keyword in paper['title'].lower())
-    if any(keyword in paper['abstract'].lower() for keyword in keywords) or any(keyword in paper['title'].lower() for keyword in keywords):
-        title = html.unescape(paper['title'])
-        headline = '{} ({} - {})\n'.format(title, paper['authors'], paper['date'])
-        abstract = html.unescape(paper['abstract'])
-        report = headline + abstract + '\nLink: {}'.format(paper['main_page'])
+    title = html.unescape(paper['title'])
+    headline = '{} ({} - {})\n'.format(title, paper['authors'], paper['date'])
+    abstract = html.unescape(paper['abstract'])
+    report = headline + abstract + '\nLink: {}'.format(paper['main_page'])
 
         # extract, has_number = extract_line(abstract, keyword)
         # if extract:
@@ -196,8 +197,7 @@ def get_report(paper, keywords):
         #     report = headline + abstract + '\nLink: {}'.format(paper['main_page'])
         #     # print("---------------------------------link---------------------------------")
         #     # print(paper['main_page'])
-        return report, True
-    return '', False
+    return report
     # return report, has_number
 
 def txt2reports(txt):
@@ -223,7 +223,7 @@ def txt2reports(txt):
     return reports, found
 
 
-def get_papers(keyword="alignment attack jailbreak cot deepseek o1 reasoning safety chain-of-thought",number=200):
+def get_papers(keyword="alignment attack jailbreak cot deepseek o1 reasoning safety chain-of-thought",data_start="2025-03-25",data_end="2025-03-26"):
     all_papers = []
     """
     If keyword is an English word, then search in CS category only to avoid papers from other categories, resulted from the ambiguity
@@ -236,14 +236,14 @@ def get_papers(keyword="alignment attack jailbreak cot deepseek o1 reasoning saf
     url_relation=''
     for index, word in enumerate(words):
         url_relation+=f'&terms-{str(index)}-operator=OR&terms-{str(index)}-term={word}&terms-{str(index)}-field=all' if index>0 else f'&terms-0-operator=AND&terms-0-term={word}&terms-0-field=all'
-    query_temp = 'https://arxiv.org/search/advanced?advanced={}&classification-computer_science=y&classification-physics_archives=all&classification-include_cross_list=include&date-filter_by=all_dates&date-year=&date-from_date=&date-to_date=&date-date_type=submitted_date&abstracts=show&size={}&order=-announced_date_first&start={}'
+    query_temp = 'https://arxiv.org/search/advanced?advanced={}&classification-computer_science=y&classification-physics_archives=all&classification-include_cross_list=include&date-filter_by=date_range&date-year=&date-from_date={}&date-to_date={}&date-date_type=submitted_date&abstracts=show&size={}&order=-announced_date_first&start={}'
     # keyword_q = keyword.replace(' ', '+')
     page = 0
     per_page = 200
     keep="initial_start"
     print("start scanning!")
     while keep:
-        query = query_temp.format(url_relation, str(per_page), str(page))
+        query = query_temp.format(url_relation, data_start, data_end, str(per_page), str(page*per_page))
 
         req = urllib.request.Request(query)
         try:
@@ -261,23 +261,44 @@ def get_papers(keyword="alignment attack jailbreak cot deepseek o1 reasoning saf
                 return
             elif keep=="searching":
                 print("finished searching!")
-                return
+                break
 
         all_papers.extend(papers)
         page += 1
         keep="searching"
-        print(f'{len(all_papers)}')
-        if len(all_papers)>number:
-            break
+        print(f'Currently {len(all_papers)} papers are found!')
+        # if len(all_papers)>number:
+        #     break
     # 按照日期对论文进行排序
     from datetime import datetime
+    paper_frame = pd.DataFrame()
     all_papers.sort(key=lambda x: datetime.strptime(x['date'], '%d %B, %Y'),reverse=True)
-    print(len(all_papers))
+    all_reports=[]
+    print(f"Finish searching! Got {len(all_papers)} in total!")
     for paper in all_papers:
-        report, shown= get_report(paper, keyword)
-        if shown:
-            print(report)
-            print('====================================================')
+        report= get_report(paper, keyword)
+        # print(report)
+        # print('====================================================')
+        paper_frame = pd.concat([paper_frame, pd.DataFrame([paper])], ignore_index=True)
+        all_reports.append(report)
+    print("Now analyzing...")
+    del paper_frame['pdf']
+    paper_frame['date']=pd.to_datetime(paper_frame['date']).dt.strftime("%m/%d, %Y")
+    paper_frame['related']=None
+    paper_frame['related_score']=None
+    paper_frame['analyze_reason']=None
+    paper_frame['classification']=None
+    for i in tqdm(range(len(all_papers))):
+        marker=gpt_marker()
+        marker.analyze(all_reports[i])
+        paper_frame.loc[i,'related']=marker.related
+        paper_frame.loc[i,'related_score']=marker.related_score
+        paper_frame.loc[i,'analyze_reason']=marker.reason
+        paper_frame.loc[i,'classification']=marker.classification
+        paper_frame.to_csv(f'../history/{keyword.replace(" ","_")}_{data_start}->{data_end}.csv')
+
+
+
 
 
 def main():

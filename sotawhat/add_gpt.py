@@ -41,14 +41,16 @@ class gpt_marker:
             "Now I will provide a title and an abstract of a paper. Please read them carefully and analyze the questions.\n"+
             "Paper info:\n"+"{}"+
             "Question:\n"+
-            "Does it mention any topics related to models safety(include but not limited to any attacks and defenses)?\n"
             "Does it mention any topics related to large language models?\n"+
+            "Does it mention any topics related to models safety(include but not limited to any attacks and defenses)?\n"+
             "Does it mention any topics related to llm with reasoning capability or chain-of-thought capability (such as gpt-o1, qwq, deepseek-r1 or kimi-1.5-think)?\n"+
             "Answer format:\n"+
             "First show your reasoning contents and then conclude with a word (true or false) and a number ranging from 0-10 indicating the intense of relation.\
-            10 means the whole paper is totally about the mentioned topic and has positive answers for ALL questions, while 0 means it is absolutely unrelated to any questions above. If the first answer is false, then the score should be low. Only all papers with all positive answers could have a score higher than 6.\n"+
-            "Example format: '**Conclusion: True, 6**'\n"+
-            "Do not add more contents after showing the score.\n\n"+
+            10 means the whole paper is totally about the mentioned topic and has positive answers for ALL questions,\
+            while 0 means it is absolutely unrelated to any questions above. If the first answer is false, then the score should be low.\
+            **Only all papers with all positive answers could have a score higher than 6.**\n"+
+            "After analyzing all questions, you could provide ONE conclusion for the paper. Example format: '**Conclusion: True, 6**'\n"+
+            "Do not add more contents after showing the score. Do not attach every question with a conclusion, either.\n\n"+
             "Now start your analysis:\n",
             "What is the aim of the paper? Does it propose a new way to attack the model, or propose a new defense method to protect the model,\
             or a study to get some conclusions, or a benchmark assessing the capability of the models, or a survey covering the development of the field?"+
@@ -59,29 +61,34 @@ class gpt_marker:
             "Now start your analysis:\n",
         ]
         self.related=False
-        self.classification=None
-    def chat_completions(self,paper):
+        self.related_score=0
+        self.classification=False
+        self.reason=None
+    def analyze(self,paper):
         self.messages.append({"role": "user", "content": self.query[0].format(paper)})
         raw_response = self.client.chat.completions.create(
             model=self.model,
-            messages=self.messages
+            messages=self.messages,
+            temperature=0.,
         )
         response=raw_response.choices[0].message.content
-        self.messages.append({"role": "assistant", "content": response})
-        print(response)
 
-        self.messages.append({"role": "user", "content": self.query[1].format()})
+        self.reason=response
+        self.related="True" in response.split("**Conclusion: ")[-1]
+        self.related_score=int(re.findall(r"\d+",response.split("**Conclusion: ")[-1])[0])
 
-        if "True" in response.split("**Conclusion: ")[-1] and int(re.findall(r"\d+",response.split("**Conclusion: ")[-1])[0])>5:
-            self.related=True
+        if self.related and self.related_score>5:
+            self.messages.append({"role": "assistant", "content": response})
+            self.messages.append({"role": "user", "content": self.query[1].format()})
             raw_response = self.client.chat.completions.create(
                 model=self.model,
-                messages=self.messages
+                messages=self.messages,
+                temperature=0.,
             )
             response=raw_response.choices[0].message.content
             self.messages.append({"role": "assistant", "content": response})
             self.classification=response.split("**Conclusion: ")[-1][:-2]
-            print(response.split("**Conclusion: ")[-1][:-2])
+            # print(response.split("**Conclusion: ")[-1][:-2])
             return 0
     
 if __name__ == '__main__':
@@ -89,4 +96,4 @@ if __name__ == '__main__':
 Large Language Models (LLMs) are increasingly deployed as computer-use agents, autonomously performing tasks within real desktop or web environments. While this evolution greatly expands practical use cases for humans, it also creates serious security exposures. We present SUDO (Screen-based Universal Detox2Tox Offense), a novel attack framework that systematically bypasses refusal trained safeguards in commercial computer-use agents, such as Claude Computer Use. The core mechanism, Detox2Tox, transforms harmful requests (that agents initially reject) into seemingly benign requests via detoxification, secures detailed instructions from advanced vision language models (VLMs), and then reintroduces malicious content via toxification just before execution. Unlike conventional jailbreaks, SUDO iteratively refines its attacks based on a built-in refusal feedback, making it increasingly effective against robust policy filters. In extensive tests spanning 50 real-world tasks and multiple state-of-the-art VLMs, SUDO achieves a stark attack success rate of 24% (with no refinement), and up to 41% (by its iterative refinement) in Claude Computer Use. By revealing these vulnerabilities and demonstrating the ease with which they can be exploited in real-world computing environments, this paper highlights an immediate need for robust, context-aware safeguards. WARNING: This paper includes harmful or offensive model outputs.\
 Link: https://arxiv.org/abs/2503.20279"
     paper_reader=gpt_marker()
-    paper_reader.chat_completions(paper)
+    paper_reader.analyze(paper)
