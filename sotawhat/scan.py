@@ -5,25 +5,24 @@ import urllib.error
 import urllib.request
 import warnings
 import html
-# import nltk
-# from nltk.tokenize import word_tokenize
-# from six.moves.html_parser import HTMLParser
+from tenacity import retry, stop_after_attempt
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 from spellchecker import SpellChecker
 import time
 import pandas as pd
 from add_gpt import gpt_marker
 from tqdm import tqdm
-# try:
-#     nltk.data.find('tokenizers/punkt')
-# except LookupError:
-#     nltk.download('punkt')
 
-# h = HTMLParser()
 
 AUTHOR_TAG = '<a href="/search/?searchtype=author'
 TITLE_TAG = '<p class="title is-5 mathjax">'
 ABSTRACT_TAG = '<span class="abstract-full has-text-grey-dark mathjax"'
 DATE_TAG = '<p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span>'
+
+SAVE_INTERVAL = 15    # 每处理N篇保存一次
+MAX_WORKERS = 32      # 并发线程数
+
 ##TODO: add sorting program
 
 def get_authors(lines, i):
@@ -124,65 +123,6 @@ def is_list_numer(tokens, i, value):
         return True
     return False
 
-
-# def has_number(sent):
-#     tokens = word_tokenize(sent)
-#     for i, token in enumerate(tokens):
-#         if token.endswith('\\'):
-#             token = token[:-2]
-#         if token.endswith('x'):  # sometimes people write numbers as 1.7x
-#             token = token[:-1]
-#         if token.startswith('x'):  # sometimes people write numbers as x1.7
-#             token = token[1:]
-#         if token.startswith('$') and token.endswith('$'):
-#             token = token[1:-1]
-#         if is_float(token):
-#             return True
-#         try:
-#             value = int(token)
-#         except:
-#             continue
-#         if (not is_citation_year(tokens, i)) and (not is_list_numer(tokens, i, value)):
-#             return True
-
-#     return False
-
-
-# def contains_sota(sent):
-#     return 'state-of-the-art' in sent or 'state of the art' in sent or 'SOTA' in sent
-
-
-# def extract_line(abstract, keyword):
-#     lines = []
-#     numbered_lines = []
-#     kw_mentioned = False
-#     abstract = abstract.replace("et. al", "et al.")
-#     sentences = abstract.split('. ')
-#     kw_sentences = []
-#     for sent in sentences:
-#         if keyword in sent.lower():
-#             kw_mentioned = True
-#             if has_number(sent):
-#                 numbered_lines.append(sent)
-#             elif contains_sota(sent):
-#                 numbered_lines.append(sent)
-#             else:
-#                 kw_sentences.append(sent)
-#                 lines.append(sent)
-#             continue
-
-#         if kw_mentioned and has_number(sent):
-#             if not numbered_lines:
-#                 numbered_lines.append(kw_sentences[-1])
-#             numbered_lines.append(sent)
-#         if kw_mentioned and contains_sota(sent):
-#             lines.append(sent)
-
-#     if len(numbered_lines) > 0:
-#         return '. '.join(numbered_lines), True
-#     return '. '.join(lines[-2:]), False
-
-
 def get_report(paper, keywords):
     # print(keyword in paper['abstract'].lower())
     # print(keyword in paper['title'].lower())
@@ -190,15 +130,7 @@ def get_report(paper, keywords):
     headline = '{} ({} - {})\n'.format(title, paper['authors'], paper['date'])
     abstract = html.unescape(paper['abstract'])
     report = headline + abstract + '\nLink: {}'.format(paper['main_page'])
-
-        # extract, has_number = extract_line(abstract, keyword)
-        # if extract:
-        #     # report = headline + extract + '\nLink: {}'.format(paper['main_page'])
-        #     report = headline + abstract + '\nLink: {}'.format(paper['main_page'])
-        #     # print("---------------------------------link---------------------------------")
-        #     # print(paper['main_page'])
     return report
-    # return report, has_number
 
 def txt2reports(txt):
     reports = []
@@ -248,79 +180,154 @@ def make_request_with_retry(req, max_retries=5, retry_delay=2):
         except Exception as e:
             print(f'Unexpected error: {str(e)}')
             return None
+
+@retry(stop=stop_after_attempt(3))
+def process_paper(i, report):
+    """ 处理单篇论文的独立函数 """
+    marker = gpt_marker()
+    marker.analyze(report)
+    return {
+        'index': i,
+        'related_score': marker.related_score,
+        'analyze_reason': marker.reason,
+        'classification': marker.classification
+    }     
+
+def load_progress(paper_frame):
+    # 深拷贝原始DataFrame避免污染
+    current_df = paper_frame.copy()
+    
+    pending_mask = (current_df['related_score'].isnull())
+    pending_indices = current_df[pending_mask].index.tolist()
+    
+    return current_df, pending_indices
+    
+def save_progress(df,TEMP_FILE):
+    """ 原子化保存进度 """
+    temp_path = TEMP_FILE + ".tmp"
+    df.to_csv(temp_path)
+    os.replace(temp_path, TEMP_FILE)  # 原子操作替换文件
+
+def concurrent_processing(paper_frame, keyword,data_start, data_end,TEMP_FILE):
+    # 1. 加载已有进度
+    current_df, pending_indices = load_progress(paper_frame)
+    if not pending_indices:
+        print("所有论文已处理完成！")
+    else:
+        print(f"待处理论文数量: {len(pending_indices)}/{len(current_df)}")
+
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = {
+                executor.submit(process_paper, i, paper_frame.loc[i,'content']): i 
+                for i in pending_indices
+            }
+            
+            # 4. 带进度条的批处理
+            batch = []
+            for future in tqdm(as_completed(futures), total=len(pending_indices)):
+                try:
+                    result = future.result()
+                    # 更新内存数据
+                    for col in ['related_score', 'analyze_reason', 'classification']:
+                        current_df.loc[result['index'], col] = result[col]
+                    batch.append(result['index'])
+                    
+                    # 定期保存
+                    if len(batch) >= SAVE_INTERVAL:
+                        save_progress(current_df,TEMP_FILE)
+                        batch = []
+                        
+                except Exception as e:
+                    print(f"处理索引 {futures[future]} 失败: {str(e)}")
+                    save_progress(current_df,TEMP_FILE)  # 出错时立即保存
+
+            # 5. 最终保存
+            if batch:
+                save_progress(current_df,TEMP_FILE)
         
-def get_papers(keyword="alignment attack jailbreak cot deepseek o1 reasoning safety chain-of-thought privacy",data_start="2025-03-27",data_end="2025-03-28"):
+    # 6. 重命名为最终文件
+    final_path = f'../history/{keyword.replace(" ","_")}_{data_start}->{data_end}.csv'
+    os.rename(TEMP_FILE, final_path)  
+
+def get_papers(keyword="alignment attack jailbreak cot deepseek o1 reasoning safety chain-of-thought privacy defen",data_start="2025-03-27",data_end="2025-03-28", force_search=False):
+
     all_papers = []
     """
     If keyword is an English word, then search in CS category only to avoid papers from other categories, resulted from the ambiguity
     """
     keyword = keyword.lower()
     words = keyword.split()
-    # d = SpellChecker()
-    # if not d.unknown(words):
-    #     query_temp = 'https://arxiv.org/search/advanced?advanced=&terms-0-operator=AND&terms-0-term={}&terms-0-field=all&classification-computer_science=y&classification-physics_archives=all&date-filter_by=all_dates&date-year=&date-from_date=&date-to_date=&date-date_type=submitted_date&abstracts=show&size={}&order=-announced_date_first&start={}'
-    url_relation=''
-    for index, word in enumerate(words):
-        url_relation+=f'&terms-{str(index)}-operator=OR&terms-{str(index)}-term={word}&terms-{str(index)}-field=all' if index>0 else f'&terms-0-operator=AND&terms-0-term={word}&terms-0-field=all'
-    query_temp = 'https://arxiv.org/search/advanced?advanced={}&classification-computer_science=y&classification-physics_archives=all&classification-include_cross_list=include&date-filter_by=date_range&date-year=&date-from_date={}&date-to_date={}&date-date_type=submitted_date&abstracts=show&size={}&order=-announced_date_first&start={}'
-    # keyword_q = keyword.replace(' ', '+')
-    page = 0
-    per_page = 200
-    keep="initial_start"
-    print("start scanning!")
-    while keep:
-        query = query_temp.format(url_relation, data_start, data_end, str(per_page), str(page*per_page))
+    TEMP_FILE = f"../history/temp_{keyword.replace(' ','_')}_{data_start}->{data_end}.csv"
+    if os.path.exists(TEMP_FILE) and not force_search:
+        # 直接加载临时文件
+        paper_frame = pd.read_csv(TEMP_FILE, index_col=0)
+        print(f"检测到临时文件，从中恢复进度...")
+    else:
 
-        req = urllib.request.Request(query)
-        response=make_request_with_retry(req)
-        if not response:
-            return
-        txt = response.read()
-        papers, found = txt2reports(txt)
-        # print("papers: ", papers)
-        if not found:
-            if keep=="initial_start":
-                print('Sorry, we were unable to find any abstract or title with the word {}'.format(keyword))
+        # d = SpellChecker()
+        # if not d.unknown(words):
+        #     query_temp = 'https://arxiv.org/search/advanced?advanced=&terms-0-operator=AND&terms-0-term={}&terms-0-field=all&classification-computer_science=y&classification-physics_archives=all&date-filter_by=all_dates&date-year=&date-from_date=&date-to_date=&date-date_type=submitted_date&abstracts=show&size={}&order=-announced_date_first&start={}'
+        url_relation=''
+        for index, word in enumerate(words):
+            url_relation+=f'&terms-{str(index)}-operator=OR&terms-{str(index)}-term={word}&terms-{str(index)}-field=all' if index>0 else f'&terms-0-operator=AND&terms-0-term={word}&terms-0-field=all'
+        query_temp = 'https://arxiv.org/search/advanced?advanced={}&classification-computer_science=y&classification-physics_archives=all&classification-include_cross_list=include&date-filter_by=date_range&date-year=&date-from_date={}&date-to_date={}&date-date_type=submitted_date&abstracts=show&size={}&order=-announced_date_first&start={}'
+        # keyword_q = keyword.replace(' ', '+')
+        page = 0
+        per_page = 200
+        keep="initial_start"
+        print("start scanning!")
+        while keep:
+            query = query_temp.format(url_relation, data_start, data_end, str(per_page), str(page*per_page))
+
+            req = urllib.request.Request(query)
+            response=make_request_with_retry(req)
+            if not response:
                 return
-            elif keep=="searching":
-                print("finished searching!")
-                break
+            txt = response.read()
+            papers, found = txt2reports(txt)
+            # print("papers: ", papers)
+            if not found:
+                if keep=="initial_start":
+                    print('Sorry, we were unable to find any abstract or title with the word {}'.format(keyword))
+                    return
+                elif keep=="searching":
+                    print("finished searching!")
+                    break
 
-        all_papers.extend(papers)
-        page += 1
-        keep="searching"
-        print(f'Currently {len(all_papers)} papers are found!')
-        # if len(all_papers)>number:
-        #     break
-    # 按照日期对论文进行排序
-    from datetime import datetime
-    paper_frame = pd.DataFrame()
-    all_papers.sort(key=lambda x: datetime.strptime(x['date'], '%d %B, %Y'),reverse=True)
-    all_reports=[]
-    print(f"Finish searching! Got {len(all_papers)} in total!")
-    for paper in all_papers:
-        report= get_report(paper, keyword)
-        # print(report)
-        # print('====================================================')
-        paper_frame = pd.concat([paper_frame, pd.DataFrame([paper])], ignore_index=True)
-        all_reports.append(report)
+            all_papers.extend(papers)
+            page += 1
+            keep="searching"
+            print(f'Currently {len(all_papers)} papers are found!')
+            # if len(all_papers)>number:
+            #     break
+        # 按照日期对论文进行排序
+        paper_frame = pd.DataFrame()
+        all_papers.sort(key=lambda x: datetime.strptime(x['date'], '%d %B, %Y'),reverse=True)
+        all_reports=[]
+        print(f"Finish searching! Got {len(all_papers)} in total!")
+        for paper in all_papers:
+            report= get_report(paper, keyword)
+            paper_frame = pd.concat([paper_frame, pd.DataFrame([paper])], ignore_index=True)
+            all_reports.append(report)
+        del paper_frame['pdf']
+        paper_frame['content']=all_reports
+        paper_frame['date']=pd.to_datetime(paper_frame['date']).dt.strftime("%m/%d, %Y")
+        paper_frame['related_score']=None
+        paper_frame['analyze_reason']=None
+        paper_frame['classification']=None
+        paper_frame.to_csv(TEMP_FILE)
+        print(f"Successfully saved all papers to {TEMP_FILE}!")
+
     print("Now analyzing...")
-    del paper_frame['pdf']
-    paper_frame['content']=all_reports
-    paper_frame['date']=pd.to_datetime(paper_frame['date']).dt.strftime("%m/%d, %Y")
-    # paper_frame['related']=None
-    paper_frame['related_score']=None
-    paper_frame['analyze_reason']=None
-    paper_frame['classification']=None
-    
-    for i in tqdm(range(len(all_papers))):
-        marker=gpt_marker()
-        marker.analyze(all_reports[i])
-        # paper_frame.loc[i,'related']=marker.related
-        paper_frame.loc[i,'related_score']=marker.related_score
-        paper_frame.loc[i,'analyze_reason']=marker.reason
-        paper_frame.loc[i,'classification']=marker.classification
-        paper_frame.to_csv(f'../history/{keyword.replace(" ","_")}_{data_start}->{data_end}.csv')
+    concurrent_processing(paper_frame=paper_frame,keyword=keyword,data_start=data_start,data_end=data_end,TEMP_FILE=TEMP_FILE)
+    # for i in tqdm(range(len(all_papers))):
+    #     marker=gpt_marker()
+    #     marker.analyze(all_reports[i])
+    #     # paper_frame.loc[i,'related']=marker.related
+    #     paper_frame.loc[i,'related_score']=marker.related_score
+    #     paper_frame.loc[i,'analyze_reason']=marker.reason
+    #     paper_frame.loc[i,'classification']=marker.classification
+    #     paper_frame.to_csv(f'../history/{keyword.replace(" ","_")}_{data_start}->{data_end}.csv')
 
 
 
@@ -348,7 +355,8 @@ def main():
     #     keyword = ' '.join(sys.argv[1:])
     #     num_results = 5
 
-    get_papers(data_start="2024-12-01",data_end="2025-01")
+    # get_papers(keyword="attack",data_start="2024-12-01",data_end="2024-12-02")
+    get_papers(force_search=True)
 
 
 if __name__ == '__main__':
