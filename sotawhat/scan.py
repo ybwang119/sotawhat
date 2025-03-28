@@ -24,7 +24,7 @@ AUTHOR_TAG = '<a href="/search/?searchtype=author'
 TITLE_TAG = '<p class="title is-5 mathjax">'
 ABSTRACT_TAG = '<span class="abstract-full has-text-grey-dark mathjax"'
 DATE_TAG = '<p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span>'
-
+##TODO: add sorting program
 
 def get_authors(lines, i):
     authors = []
@@ -222,7 +222,33 @@ def txt2reports(txt):
             break
     return reports, found
 
-
+def make_request_with_retry(req, max_retries=5, retry_delay=2):
+    """
+    带重试功能的请求函数
+    :param req: 请求对象
+    :param max_retries: 最大重试次数
+    :param retry_delay: 重试等待时间(秒)
+    :return: 响应对象或None
+    """
+    retry_count = 0
+    
+    while retry_count <= max_retries:
+        try:
+            response = urllib.request.urlopen(req)
+            return response  # 请求成功，返回响应
+        except urllib.error.HTTPError as e:
+            if e.code == 400 and retry_count < max_retries:
+                retry_count += 1
+                print(f'HTTP 400错误，等待{retry_delay}秒后重试... (尝试次数: {retry_count})')
+                time.sleep(retry_delay)
+                continue
+            
+            print(f'Error {e.code}: problem accessing the server')
+            return None
+        except Exception as e:
+            print(f'Unexpected error: {str(e)}')
+            return None
+        
 def get_papers(keyword="alignment attack jailbreak cot deepseek o1 reasoning safety chain-of-thought privacy",data_start="2025-03-27",data_end="2025-03-28"):
     all_papers = []
     """
@@ -246,12 +272,9 @@ def get_papers(keyword="alignment attack jailbreak cot deepseek o1 reasoning saf
         query = query_temp.format(url_relation, data_start, data_end, str(per_page), str(page*per_page))
 
         req = urllib.request.Request(query)
-        try:
-            response = urllib.request.urlopen(req)
-        except urllib.error.HTTPError as e:
-            print('Error {}: problem accessing the server'.format(e.code))
+        response=make_request_with_retry(req)
+        if not response:
             return
-
         txt = response.read()
         papers, found = txt2reports(txt)
         # print("papers: ", papers)
@@ -325,7 +348,7 @@ def main():
     #     keyword = ' '.join(sys.argv[1:])
     #     num_results = 5
 
-    get_papers()
+    get_papers(data_start="2024-12-01",data_end="2025-01")
 
 
 if __name__ == '__main__':

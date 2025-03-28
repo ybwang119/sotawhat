@@ -113,7 +113,7 @@ class gpt_marker:
         self.messages.append({"role": "user", "content": self.query[0].format(paper)})
         raw_response=self.get_chat_completion_with_retry()
         response=raw_response.choices[0].message.content
-        print(response)
+        # print(response)
         self.reason=response
         # self.related="True" in response.split("Conclusion:")[-1]
         self.related_score=int(re.findall(r"\d+",response.split("Conclusion:")[-1])[0])
@@ -125,7 +125,7 @@ class gpt_marker:
             response=raw_response.choices[0].message.content
             self.messages.append({"role": "assistant", "content": response})
             self.classification=response.split("**Conclusion: ")[-1][:-2]
-            print(response)
+            # print(response)
             # print(response.split("**Conclusion: ")[-1][:-2])
             return 0
     
@@ -134,4 +134,4 @@ if __name__ == '__main__':
 Large Language Models (LLMs) are increasingly deployed as computer-use agents, autonomously performing tasks within real desktop or web environments. While this evolution greatly expands practical use cases for humans, it also creates serious security exposures. We present SUDO (Screen-based Universal Detox2Tox Offense), a novel attack framework that systematically bypasses refusal trained safeguards in commercial computer-use agents, such as Claude Computer Use. The core mechanism, Detox2Tox, transforms harmful requests (that agents initially reject) into seemingly benign requests via detoxification, secures detailed instructions from advanced vision language models (VLMs), and then reintroduces malicious content via toxification just before execution. Unlike conventional jailbreaks, SUDO iteratively refines its attacks based on a built-in refusal feedback, making it increasingly effective against robust policy filters. In extensive tests spanning 50 real-world tasks and multiple state-of-the-art VLMs, SUDO achieves a stark attack success rate of 24% (with no refinement), and up to 41% (by its iterative refinement) in Claude Computer Use. By revealing these vulnerabilities and demonstrating the ease with which they can be exploited in real-world computing environments, this paper highlights an immediate need for robust, context-aware safeguards. WARNING: This paper includes harmful or offensive model outputs.\
 Link: https://arxiv.org/abs/2503.20279"
     paper_reader=gpt_marker()
-    paper_reader.analyze(paper)
+    paper_reader.analyze(paper) 
