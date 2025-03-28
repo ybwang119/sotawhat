@@ -79,7 +79,7 @@ class gpt_marker:
             "What is the aim of the paper? Does it propose a new way to attack the model, or propose a new defense method to protect the model,\
             or a study to get some conclusions, or a benchmark assessing the capability of the models, or a survey covering the development of the field?"+
             "Answer format:\n"+
-            "First show your thinking contents and then conclude with a word (attack, defense, study, benchmark or survey).\n"+
+            "First show your thinking contents and then conclude with a word (attack, defense, study, benchmark or survey).Only pick study when it does not belong to the others.\n"+
             "Example format: '**Conclusion: study**'\n"+
             "Do not add more contents after showing the conclusion.\n\n"+
             "Now start your analysis:\n",
@@ -114,7 +114,7 @@ class gpt_marker:
         self.messages.append({"role": "user", "content": self.query[0].format(paper)})
         raw_response=self.get_chat_completion_with_retry()
         response=raw_response.choices[0].message.content
-
+        print(response)
         self.reason=response
         # self.related="True" in response.split("Conclusion:")[-1]
         self.related_score=int(re.findall(r"\d+",response.split("Conclusion:")[-1])[0])
@@ -126,6 +126,7 @@ class gpt_marker:
             response=raw_response.choices[0].message.content
             self.messages.append({"role": "assistant", "content": response})
             self.classification=response.split("**Conclusion: ")[-1][:-2]
+            print(response)
             # print(response.split("**Conclusion: ")[-1][:-2])
             return 0
     
