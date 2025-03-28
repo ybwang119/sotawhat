@@ -6,8 +6,7 @@ import time
 import json
 import time
 import re
-API_SECRET_KEY = "sk-zk2430a6a5d06128d132e17dc544fcf747a67d2cb95a2d05";
-BASE_URL = "https://api.zhizengzeng.com/v1/"
+from api import API_SECRET_KEY, BASE_URL
 
 # chat with other model
 class gpt_marker:
