@@ -119,7 +119,7 @@ class gpt_marker:
         # self.related="True" in response.split("Conclusion:")[-1]
         self.related_score=int(re.findall(r"\d+",response.split("Conclusion:")[-1])[0])
 
-        if self.related_score>1:
+        if self.related_score>2:
             self.messages.append({"role": "assistant", "content": response})
             self.messages.append({"role": "user", "content": self.query[1].format()})
             raw_response=self.get_chat_completion_with_retry()
