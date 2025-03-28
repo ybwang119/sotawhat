@@ -285,7 +285,7 @@ def get_papers(keyword="alignment attack jailbreak cot deepseek o1 reasoning saf
     del paper_frame['pdf']
     paper_frame['content']=all_reports
     paper_frame['date']=pd.to_datetime(paper_frame['date']).dt.strftime("%m/%d, %Y")
-    paper_frame['related']=None
+    # paper_frame['related']=None
     paper_frame['related_score']=None
     paper_frame['analyze_reason']=None
     paper_frame['classification']=None
@@ -293,7 +293,7 @@ def get_papers(keyword="alignment attack jailbreak cot deepseek o1 reasoning saf
     for i in tqdm(range(len(all_papers))):
         marker=gpt_marker()
         marker.analyze(all_reports[i])
-        paper_frame.loc[i,'related']=marker.related
+        # paper_frame.loc[i,'related']=marker.related
         paper_frame.loc[i,'related_score']=marker.related_score
         paper_frame.loc[i,'analyze_reason']=marker.reason
         paper_frame.loc[i,'classification']=marker.classification

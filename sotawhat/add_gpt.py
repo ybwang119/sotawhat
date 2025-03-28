@@ -38,29 +38,6 @@ class gpt_marker:
         #     "Do not add more contents after showing the conclusion.\n\n"+
         #     "Now start your analysis:\n",
         # ]
-        self.query=[
-            "Now I will provide a title and an abstract of a paper. Please read them carefully and analyze the questions.\n"+
-            "Paper info:\n"+"{}"+
-            "Question:\n"+
-            "Does it mention any topics related to large language models?\n"+
-            "Does it mention any topics related to models safety(include but not limited to any attacks and defenses)?\n"+
-            "Does it mention any topics related to llm with reasoning capability or chain-of-thought capability (such as gpt-o1, qwq, deepseek-r1 or kimi-1.5-think)?\n"+
-            "Answer format:\n"+
-            "First show your reasoning contents and then conclude with a word (true or false) and a number ranging from 0-10 indicating the intense of relation.\
-            10 means the whole paper is totally about the mentioned topic and has positive answers for ALL questions,\
-            while 0 means it is absolutely unrelated to any questions above. If the first answer is false, then the score should be low.\
-            **Only all papers with all positive answers could have a score higher than 6.**\n"+
-            "After analyzing all questions, you could provide ONE conclusion for the paper. Example format: '**Conclusion: True, 6**'\n"+
-            "Do not add more contents after showing the score. Do not attach every question with a conclusion, either.\n\n"+
-            "Now start your analysis:\n",
-            "What is the aim of the paper? Does it propose a new way to attack the model, or propose a new defense method to protect the model,\
-            or a study to get some conclusions, or a benchmark assessing the capability of the models, or a survey covering the development of the field?"+
-            "Answer format:\n"+
-            "First show your thinking contents and then conclude with a word (attack, defense, study, benchmark or survey).\n"+
-            "Example format: '**Conclusion: study**'\n"+
-            "Do not add more contents after showing the conclusion.\n\n"+
-            "Now start your analysis:\n",
-        ]
         # self.query=[
         #     "Now I will provide a title and an abstract of a paper. Please read them carefully and analyze the questions.\n"+
         #     "Paper info:\n"+"{}"+
@@ -69,12 +46,12 @@ class gpt_marker:
         #     "Does it mention any topics related to models safety(include but not limited to any attacks and defenses)?\n"+
         #     "Does it mention any topics related to llm with reasoning capability or chain-of-thought capability (such as gpt-o1, qwq, deepseek-r1 or kimi-1.5-think)?\n"+
         #     "Answer format:\n"+
-        #     "First show your reasoning contents and then **sum up the number of positive answers**. \
-        #     3 means the whole paper is totally about the mentioned topic and has positive answers for ALL three questions,\
-        #     while 0 means it is absolutely unrelated to any questions above.\
-        #     **Only all papers with all positive answers could have a score of 3.** Similarly, 2 for 2 positive answers and 1 for 1 positive answer.\n"+
-        #     "After analyzing all questions, you could provide ONE number for the paper. Example format: '**Conclusion: 2**'\n"+
-        #     "Do not add more contents after showing the score.\n\n"+
+        #     "First show your reasoning contents and then conclude with a word (true or false) and a number ranging from 0-10 indicating the intense of relation.\
+        #     10 means the whole paper is totally about the mentioned topic and has positive answers for ALL questions,\
+        #     while 0 means it is absolutely unrelated to any questions above. If the first answer is false, then the score should be low.\
+        #     **Only all papers with all positive answers could have a score higher than 6.**\n"+
+        #     "After analyzing all questions, you could provide ONE conclusion for the paper. Example format: '**Conclusion: True, 6**'\n"+
+        #     "Do not add more contents after showing the score. Do not attach every question with a conclusion, either.\n\n"+
         #     "Now start your analysis:\n",
         #     "What is the aim of the paper? Does it propose a new way to attack the model, or propose a new defense method to protect the model,\
         #     or a study to get some conclusions, or a benchmark assessing the capability of the models, or a survey covering the development of the field?"+
@@ -84,7 +61,30 @@ class gpt_marker:
         #     "Do not add more contents after showing the conclusion.\n\n"+
         #     "Now start your analysis:\n",
         # ]
-        self.related=False
+        self.query=[
+            "Now I will provide a title and an abstract of a paper. Please read them carefully and analyze the questions.\n"+
+            "Paper info:\n"+"{}"+
+            "Question:\n"+
+            "Does it mention any topics related to large language models?\n"+
+            "Does it mention any topics related to models safety(include but not limited to any attacks and defenses)?\n"+
+            "Does it mention any topics related to llm with reasoning capability or chain-of-thought capability (such as gpt-o1, qwq, deepseek-r1 or kimi-1.5-think)?\n"+
+            "Answer format:\n"+
+            "First show your reasoning contents and then **sum up the number of positive answers**. \
+            3 means the whole paper is totally about the mentioned topic and has positive answers for ALL three questions,\
+            while 0 means it is absolutely unrelated to any questions above.\
+            **Only all papers with all positive answers could have a score of 3.** Similarly, 2 for 2 positive answers and 1 for 1 positive answer.\n"+
+            "After analyzing all questions, you could provide ONE number for the paper. Example format: '**Conclusion: 2**'\n"+
+            "Do not add more contents after showing the score.\n\n"+
+            "Now start your analysis:\n",
+            "What is the aim of the paper? Does it propose a new way to attack the model, or propose a new defense method to protect the model,\
+            or a study to get some conclusions, or a benchmark assessing the capability of the models, or a survey covering the development of the field?"+
+            "Answer format:\n"+
+            "First show your thinking contents and then conclude with a word (attack, defense, study, benchmark or survey).\n"+
+            "Example format: '**Conclusion: study**'\n"+
+            "Do not add more contents after showing the conclusion.\n\n"+
+            "Now start your analysis:\n",
+        ]
+        # self.related=False
         self.related_score=0
         self.classification=False
         self.reason=None
@@ -116,10 +116,10 @@ class gpt_marker:
         response=raw_response.choices[0].message.content
 
         self.reason=response
-        self.related="True" in response.split("Conclusion:")[-1]
+        # self.related="True" in response.split("Conclusion:")[-1]
         self.related_score=int(re.findall(r"\d+",response.split("Conclusion:")[-1])[0])
 
-        if self.related and self.related_score>5:
+        if self.related_score>1:
             self.messages.append({"role": "assistant", "content": response})
             self.messages.append({"role": "user", "content": self.query[1].format()})
             raw_response=self.get_chat_completion_with_retry()
