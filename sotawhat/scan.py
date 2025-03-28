@@ -246,7 +246,7 @@ def concurrent_processing(paper_frame, keyword,data_start, data_end,TEMP_FILE):
                 save_progress(current_df,TEMP_FILE)
         
     # 6. 重命名为最终文件
-    final_path = f'../history/{keyword.replace(" ","_")}_{data_start}->{data_end}.csv'
+    final_path = f'../history/{keyword.replace(" ","_")}_{data_start}-{data_end}.csv'
     os.rename(TEMP_FILE, final_path)  
 
 def get_papers(keyword="alignment attack jailbreak cot deepseek o1 reasoning safety chain-of-thought privacy defen",data_start="2025-03-27",data_end="2025-03-28", force_search=False):
@@ -257,7 +257,14 @@ def get_papers(keyword="alignment attack jailbreak cot deepseek o1 reasoning saf
     """
     keyword = keyword.lower()
     words = keyword.split()
-    TEMP_FILE = f"../history/temp_{keyword.replace(' ','_')}_{data_start}->{data_end}.csv"
+    TEMP_FILE = f"../history/temp_{keyword.replace(' ','_')}_{data_start}-{data_end}.csv"
+    final_path = TEMP_FILE.replace('temp_', '')# 1. 加载已有进度
+    if os.path.exists(final_path) and not force_search:
+        print(f"检测到最终文件 {final_path}，跳过已处理论文...")
+        return
+    elif os.path.exists(final_path):
+        print(f"检测到最终文件 {final_path}，但强制重新搜索，将重新处理论文...")
+        os.remove(final_path)
     if os.path.exists(TEMP_FILE) and not force_search:
         # 直接加载临时文件
         paper_frame = pd.read_csv(TEMP_FILE, index_col=0)
@@ -319,7 +326,8 @@ def get_papers(keyword="alignment attack jailbreak cot deepseek o1 reasoning saf
         print(f"Successfully saved all papers to {TEMP_FILE}!")
 
     print("Now analyzing...")
-    concurrent_processing(paper_frame=paper_frame,keyword=keyword,data_start=data_start,data_end=data_end,TEMP_FILE=TEMP_FILE)
+    concurrent_processing(paper_frame=paper_frame,TEMP_FILE=TEMP_FILE)
+    os.rename(TEMP_FILE, final_path)  
     # for i in tqdm(range(len(all_papers))):
     #     marker=gpt_marker()
     #     marker.analyze(all_reports[i])
@@ -356,7 +364,7 @@ def main():
     #     num_results = 5
 
     # get_papers(keyword="attack",data_start="2024-12-01",data_end="2024-12-02")
-    get_papers(force_search=True)
+    get_papers(data_start="2025-03-27",data_end="2025-03-28",force_search=True)
 
 
 if __name__ == '__main__':

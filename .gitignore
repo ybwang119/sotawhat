@@ -1,1 +1,3 @@
 api*
+*egg-info*
+*.csv

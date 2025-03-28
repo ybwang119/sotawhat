@@ -87,7 +87,6 @@ class gpt_marker:
         self.related_score=0
         self.classification=False
         self.reason=None
-
     def get_chat_completion_with_retry(self, max_retries=None, initial_delay=5, backoff_factor=2):
         retry_count = 0
         current_delay = initial_delay
@@ -125,9 +124,9 @@ class gpt_marker:
             raw_response=self.get_chat_completion_with_retry()
             response=raw_response.choices[0].message.content
             self.messages.append({"role": "assistant", "content": response})
-            self.classification=response.split("**Conclusion: ")[-1]
+            self.classification=response.split("**Conclusion: ")[-1][:-2]
             # print(response)
-            # print(response.split("**Conclusion: ")[-1])
+            # print(response.split("**Conclusion: ")[-1][:-2])
             return 0
     
 if __name__ == '__main__':
