@@ -223,7 +223,7 @@ def txt2reports(txt):
     return reports, found
 
 
-def get_papers(keyword="alignment attack jailbreak cot deepseek o1 reasoning safety chain-of-thought",data_start="2025-03-25",data_end="2025-03-26"):
+def get_papers(keyword="alignment attack jailbreak cot deepseek o1 reasoning safety chain-of-thought privacy",data_start="2025-03-27",data_end="2025-03-28"):
     all_papers = []
     """
     If keyword is an English word, then search in CS category only to avoid papers from other categories, resulted from the ambiguity
@@ -283,11 +283,13 @@ def get_papers(keyword="alignment attack jailbreak cot deepseek o1 reasoning saf
         all_reports.append(report)
     print("Now analyzing...")
     del paper_frame['pdf']
+    paper_frame['content']=all_reports
     paper_frame['date']=pd.to_datetime(paper_frame['date']).dt.strftime("%m/%d, %Y")
     paper_frame['related']=None
     paper_frame['related_score']=None
     paper_frame['analyze_reason']=None
     paper_frame['classification']=None
+    
     for i in tqdm(range(len(all_papers))):
         marker=gpt_marker()
         marker.analyze(all_reports[i])
